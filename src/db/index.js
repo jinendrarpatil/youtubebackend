@@ -11,7 +11,6 @@ const connectDB = async () => {
         console.log("MONGODB connection failed", error);
         //node js gives access to process which can be used anywhere, process is nothng but a reference on which our app is runnning
         process.exit(1)
-
     }
 }
 
