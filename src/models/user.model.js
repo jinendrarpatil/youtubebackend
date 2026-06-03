@@ -56,11 +56,10 @@ const userSchema = new Schema(
 userSchema.pre("save", async function (next) {
     // to avoid password being hashed always we have isModified method to check if the field is actually modified
     if (!this.isModified("password")) {
-        return next()
+        return
     }
     //take password incrypt it before saving
     this.password = await bcrypt.hash(this.password, 10)
-    next()
 })
 
 //we can create custome methods
