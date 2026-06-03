@@ -82,7 +82,7 @@ userSchema.methods.generateAccessToken = async function () {
 }
 
 userSchema.methods.generateRefreshToken = function () {
-    return await jwt.sign({
+    return jwt.sign({
         //take mongod id from database with this._id, kept less payload as it will be frequestly used and we want to keep it light weight
         _id: this._id,
     }, process.env.REFRESH_TOKEN_SECRET,
@@ -91,4 +91,4 @@ userSchema.methods.generateRefreshToken = function () {
         })
 
 }
-export const User = monggose.model("User", userSchema)
+export const User = mongoose.model("User", userSchema)
