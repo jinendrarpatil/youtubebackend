@@ -5,9 +5,17 @@ import { User } from "../models/user.model.js"
 
 export const verifyJWT = asyncHandler(async (req, _, next) => {
     try {
-        const token = req.cookies?.accessToken || req.header("Authorization")?.replace("Bearer ", "");
+        const cookieToken = req.cookies?.accessToken;
+        const bearerToken = req.header("Authorization");
+        const token = typeof cookieToken === "string"
+            ? cookieToken
+            : typeof bearerToken === "string"
+                ? bearerToken.replace("Bearer ", "")
+                : undefined;
 
-        if (!token) {
+        console.log("token from cookie", token)
+
+        if (!token || typeof token !== "string") {
             throw new ApiError(401, "Unauthorized request")
         }
         const decodedToken = jwt.verify(token, process.env.ACCESS_TOKEN_SECRET);
