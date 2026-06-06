@@ -13,7 +13,6 @@ export const verifyJWT = asyncHandler(async (req, _, next) => {
                 ? bearerToken.replace("Bearer ", "")
                 : undefined;
 
-        console.log("token from cookie", token)
 
         if (!token || typeof token !== "string") {
             throw new ApiError(401, "Unauthorized request")
