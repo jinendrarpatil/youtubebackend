@@ -9,6 +9,7 @@ const connectDB = async () => {
     } catch (e) {
         console.log("MONGODB connection failed", error);
         //node js gives access to process which can be used anywhere, process is nothng but a reference on which our app is runnning
+        //process.exit(1) is a command used in Node.js to force the current application to stop immediately with a failure status code
         process.exit(1)
     }
 }

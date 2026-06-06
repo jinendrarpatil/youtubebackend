@@ -124,7 +124,11 @@ const loginUser = asyncHandler(async (req, res) => {
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
 
     const options = {
+        //t tells the browser that only the server is allowed to read or touch this cookie.
+        //It completely hides the cookie from frontend JavaScript.If a hacker tries to run console.log(document.cookie) on your website, your accessToken and refreshToken will show up as completely blank.The cookie can still be automatically attached to your API requests, but scripts cannot read or steal it.
         httpOnly: true,
+        // It forces the browser to only send the cookie over encrypted https:// connections.
+        //If a user logs into your site while using public coffee shop Wi-Fi, an attacker on the same network could intercept raw internet traffic. If secure is set to false, the cookie travels in plain text, allowing the attacker to steal the token out of mid-air. Setting it to true ensures it is always encrypted during transit.
         secure: true
     }
 
