@@ -302,4 +302,76 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         json(new ApiResponse(200, user, "coverImage image uploaded successfully"))
 })
 
-export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails, updateUserAvatar, updateUserCoverImage } 
+const getUserChannelProfile = asyncHandler(async (req, res) => {
+    const { username } = req.params
+
+    if (!username?.trim()) {
+        throw new ApiError(400, "username is missing")
+    }
+
+    const channel = await User.aggregate([
+        {
+            //This acts exactly like a standard find() query. It is the gatekeeper of the pipeline.
+            //It looks through your entire users collection and pulls out only the document where the username matches the one passed into the function (converted safely to lowercase).
+            $match: {
+                username: username?.toLowerCase()
+            }
+        },
+        {//$lookup is MongoDB’s version of a SQL JOIN. It lets you link two different collections together.
+            //The user object moving down the line now has a brand new array attached to it called subscribers, filled with every single subscription document where this user is the host channel.
+            $lookup: {
+                from: "subscriptions",    // 1. Look inside the 'subscriptions' collection
+                localField: "_id",        // 2. Take the '_id' of the current User
+                foreignField: "channel",  // 3. Find matching rows where 'channel' matches that id
+                as: "subscribers"         // 4. Dump all matches into an array named 'subscribers'
+            }
+        },
+        {//The user object now gets a second array attached to it called subscribedTo.
+            $lookup: {
+                from: "subscriptions",
+                localField: "_id",
+                foreignField: "subscriber", // 👈 Notice the swap: matching against 'subscriber' now
+                as: "subscribedTo"          // 👈 Dump into a new array
+            }
+        },
+        {
+            $addFields: {
+                subScribersCount: {
+                    $size: "$subscribers"
+                },
+                channelsSubscribedToCount: {
+                    $size: "$subscribedTo"
+                },
+                isSubscribed: {
+                    $cond: {
+                        if: { $in: [req.user?._id, "$subscribers.subscriber"] },
+                        then: true,
+                        else: false
+                    }
+                }
+            }
+        },
+        {
+            $project: {
+                fullName: 1,
+                username: 1,
+                subScribersCount: 1,
+                channelsSubscribedToCount: 1,
+                isSubscribed: 1,
+                avatar: 1,
+                coverImage: 1,
+                email: 1
+            }
+        }
+    ])
+
+    console.log("channel", channel)
+
+    if (!channel?.length) {
+        throw new ApiError(404, "channel does not exist")
+    }
+    return res.status(200)
+        .json(new ApiResponse(200, channel[0], "user channel fetched successfully"))
+})
+
+export { registerUser, loginUser, logoutUser, refreshAccessToken, changeCurrentPassword, getCurrentUser, updateAccountDetails, updateUserAvatar, updateUserCoverImage, getUserChannelProfile } 
