@@ -5,12 +5,13 @@ import { uploadOnCloudinary } from "../utils/cloudinary.js";
 import { ApiResponse } from "../utils/ApiResponse.js"
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken"
+import mongoose from "mongoose"
 
 const generateAccessAndRefreshTokens = async (userId) => {
     try {
         const user = await User.findById(userId);
-        const accessToken = user.generateAccessToken();
-        const refreshToken = user.generateRefreshToken();
+        const accessToken = await user.generateAccessToken();
+        const refreshToken = await user.generateRefreshToken();
 
         user.refreshToken = refreshToken;
         await user.save({ validateBeforeSave: false })
@@ -24,7 +25,6 @@ const generateAccessAndRefreshTokens = async (userId) => {
 const registerUser = asyncHandler(async (req, res) => {
     //get user details from frontend
     const { username, email, fullName, password } = req.body;
-    // console.log(email)
     //validations - not empty
     if ([fullName, email, username, password].some(field => field?.trim() === "")) {
         throw new ApiError(400, "All fields are required")
@@ -43,7 +43,6 @@ const registerUser = asyncHandler(async (req, res) => {
 
     //check for images, check for avatar (with multer provides files from middleware)
     //so bascially on request submit multer will take the file and save it on our local public folder with original name
-    // console.log(req.files)
     const avatarLocalPath = req.files?.avatar[0]?.path
     // const coverImageLocalPath = req.files?.coverImage[0]?.path
 
@@ -118,7 +117,6 @@ const loginUser = asyncHandler(async (req, res) => {
 
     //generate access & refresh token 
     const { accessToken, refreshToken } = await generateAccessAndRefreshTokens(user._id)
-    console.log("accessToken", accessToken)
 
     //send in cockies
     const loggedInUser = await User.findById(user._id).select("-password -refreshToken")
@@ -129,7 +127,7 @@ const loginUser = asyncHandler(async (req, res) => {
         httpOnly: true,
         // It forces the browser to only send the cookie over encrypted https:// connections.
         //If a user logs into your site while using public coffee shop Wi-Fi, an attacker on the same network could intercept raw internet traffic. If secure is set to false, the cookie travels in plain text, allowing the attacker to steal the token out of mid-air. Setting it to true ensures it is always encrypted during transit.
-        secure: true
+        secure: process.env.NODE_ENV === "production"
     }
 
     //login success response
@@ -146,10 +144,10 @@ const loginUser = asyncHandler(async (req, res) => {
 
 
 const logoutUser = asyncHandler(async (req, res) => {
-    User.findByIdAndUpdate(req.user._id,
+    await User.findByIdAndUpdate(req.user._id,
         {
-            $set: {
-                refreshToken: undefined
+            $unset: {
+                refreshToken: 1 //this removes the field from document
             },
         },
         {
@@ -159,7 +157,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 
     const options = {
         httpOnly: true,
-        secure: true
+        secure: process.env.NODE_ENV === "production"
     }
 
     return res.status(200)
@@ -170,7 +168,7 @@ const logoutUser = asyncHandler(async (req, res) => {
 
 
 const refreshAccessToken = asyncHandler(async (req, res) => {
-    const incomingRefreshToken = req.cookies.refreshToken || req.body.refreshToken
+    const incomingRefreshToken = req.cookies.refreshToken || req.body?.refreshToken
 
     if (!incomingRefreshToken) {
         throw new ApiError(401, "unauthorized request")
@@ -181,7 +179,7 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
         const user = await User.findById(decodedToken._id);
 
-        if (!User) {
+        if (!user) {
             throw new ApiError(401, "invalid refresh token")
         }
 
@@ -191,9 +189,9 @@ const refreshAccessToken = asyncHandler(async (req, res) => {
 
         const options = {
             httpOnly: true,
-            secure: true
+            secure: process.env.NODE_ENV === "production"
         }
-        const { accessToken, newRefreshToken } = await generateAccessAndRefreshTokens(user._id)
+        const { accessToken, refreshToken: newRefreshToken } = await generateAccessAndRefreshTokens(user._id)
 
         return res.status(200)
             .cookie("accessToken", accessToken, options)
@@ -214,7 +212,11 @@ const changeCurrentPassword = asyncHandler(async (req, res) => {
     const { oldPassword, newPassword } = req.body;
     const user = await User.findById(req.user?._id)
 
-    const isPasswordCorrect = user.isPasswordCorrect(oldPassword)
+    if (!user) {
+        throw new ApiError(404, "User not found")
+    }
+
+    const isPasswordCorrect = await user.isPasswordCorrect(oldPassword)
 
     if (!isPasswordCorrect) {
         throw new ApiError(400, "Invalide uer password");
@@ -262,7 +264,7 @@ const updateUserAvatar = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error while uploading on avatar")
     }
 
-    const user = await user.findByIdAndUpdate(req.user?._id,
+    const user = await User.findByIdAndUpdate(req.user?._id,
         {
             $set: {
                 avatar: avatar.url
@@ -288,7 +290,7 @@ const updateUserCoverImage = asyncHandler(async (req, res) => {
         throw new ApiError(400, "Error while uploading on coverImage")
     }
 
-    const user = await user.findByIdAndUpdate(req.user?._id,
+    const user = await User.findByIdAndUpdate(req.user?._id,
         {
             $set: {
                 coverImage: coverImage.url
@@ -365,8 +367,6 @@ const getUserChannelProfile = asyncHandler(async (req, res) => {
         }
     ])
 
-    console.log("channel", channel)
-
     if (!channel?.length) {
         throw new ApiError(404, "channel does not exist")
     }
@@ -382,7 +382,7 @@ const getWatchHistory = asyncHandler(async (req, res) => {
             }
         },
         {//nested pipeline : subpipeline
-            $lookeup: {
+            $lookup: {
                 from: "videos",
                 localField: "watchHistory",
                 foreignField: "_id",
